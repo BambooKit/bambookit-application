@@ -1,5 +1,6 @@
 interface ImportMetaEnv {
   readonly OPENCODE_CHANNEL: string
+  readonly OPENCODE_ENGINE_VERSION: string
   readonly BAMBOOKIT_API_URL: string
   readonly BAMBOOKIT_SUPABASE_URL: string
   readonly BAMBOOKIT_SUPABASE_ANON_KEY: string

@@ -57,6 +57,11 @@ export default defineConfig({
   main: {
     define: {
       "import.meta.env.OPENCODE_CHANNEL": JSON.stringify(channel),
+      // The bundled agent engine keeps its upstream version (WSL sidecars and model services check it);
+      // BambooKit's own app version (package.json) is separate.
+      "import.meta.env.OPENCODE_ENGINE_VERSION": JSON.stringify(
+        process.env.OPENCODE_VERSION || JSON.parse(readFileSync("../opencode/package.json", "utf8")).version,
+      ),
       ...bambookitEnv,
     },
     build: {

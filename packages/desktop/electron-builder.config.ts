@@ -58,6 +58,8 @@ const getBase = (appId: string): Configuration => ({
   // https://www.electron.build/docs/linux/
   extraMetadata: {
     desktopName: `${appId}.desktop`,
+    // Install folder and uninstall entry name (%LOCALAPPDATA%\Programsambookit-desktop), not the workspace package name.
+    name: "bambookit-desktop",
   },
   files: ["out/**/*", "resources/**/*", "!resources/opencode-cli*"],
   extraResources: [
