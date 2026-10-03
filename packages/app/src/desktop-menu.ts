@@ -1,3 +1,4 @@
+import { BAMBOOKIT_LINKS } from "./bambookit/links"
 import type { DesktopNativeKey } from "./i18n/desktop-native"
 
 export type DesktopMenuPlatform = "macos" | "windows"
@@ -279,19 +280,19 @@ export const DESKTOP_MENU: DesktopMenu[] = [
     id: "help",
     labelKey: "desktop.menu.help",
     items: [
-      { type: "item", labelKey: "desktop.menu.documentation", href: "https://opencode.ai/docs" },
-      { type: "item", labelKey: "desktop.menu.supportForum", href: "https://discord.com/invite/opencode" },
+      { type: "item", labelKey: "desktop.menu.documentation", href: BAMBOOKIT_LINKS.docs },
+      { type: "item", labelKey: "desktop.menu.supportForum", href: BAMBOOKIT_LINKS.discussions },
       { type: "item", labelKey: "desktop.menu.exportLogs", command: "logs.export" },
       { type: "separator" },
       {
         type: "item",
         labelKey: "desktop.menu.shareFeedback",
-        href: "https://github.com/anomalyco/opencode/issues/new?template=feature_request.yml",
+        href: BAMBOOKIT_LINKS.featureRequest,
       },
       {
         type: "item",
         labelKey: "desktop.menu.reportBug",
-        href: "https://github.com/anomalyco/opencode/issues/new?template=bug_report.yml",
+        href: BAMBOOKIT_LINKS.bugReport,
       },
     ],
   },

@@ -1,0 +1,28 @@
+name: 💡 Feature request / feedback
+description: Suggest an improvement or share feedback about BambooKit
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: part
+    attributes:
+      label: Which part of BambooKit?
+      options:
+        - BambooKit Desktop (Windows)
+        - BambooKit Android app
+        - Website and docs
+        - Models and agents
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: Describe the feature or the feedback.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why is it useful?
+      description: What problem does it solve for you?

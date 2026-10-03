@@ -11,7 +11,8 @@
     "./wsl/types": "./src/wsl/types.ts",
     "./vite": "./vite.js",
     "./index.css": "./src/index.css",
-    "./bambookit/types": "./src/bambookit/types.ts"
+    "./bambookit/types": "./src/bambookit/types.ts",
+    "./bambookit/links": "./src/bambookit/links.ts"
   },
   "scripts": {
     "typecheck": "tsgo -b",

@@ -1,0 +1,53 @@
+name: 🐞 Bug report
+description: Something in BambooKit Desktop, the Android app, the website or the API is not working
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please do not paste passwords, API keys, tokens or private code.
+        BambooKit Desktop → Help → **Export Logs…** creates a log file you can attach.
+  - type: dropdown
+    id: part
+    attributes:
+      label: Where does it happen?
+      options:
+        - BambooKit Desktop (Windows)
+        - BambooKit Android app
+        - Website (bambookit-web.onrender.com)
+        - Pairing / connection between PC and phone
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: BambooKit version
+      placeholder: e.g. 1.0.1 (Desktop) / 1.0.1 (Android)
+  - type: input
+    id: system
+    attributes:
+      label: Windows version / phone model
+      placeholder: e.g. Windows 11 24H2, Samsung Galaxy S25 Ultra
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Drag files here. Remove anything private first.

@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 💬 Discord Community
-    url: https://discord.gg/opencode
-    about: For support, troubleshooting, how-to questions, and real-time discussion.
+  - name: 💬 Questions and help
+    url: https://github.com/BambooKit/bambookit-application/discussions
+    about: Ask how to install, pair your phone, or use BambooKit.
+  - name: 📖 BambooKit docs
+    url: https://bambookit-web.onrender.com/docs/
+    about: Install, pairing, sessions, models and troubleshooting.

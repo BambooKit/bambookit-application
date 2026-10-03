@@ -1,3 +1,4 @@
+import { BAMBOOKIT_LINKS } from "@opencode-ai/app/bambookit/links"
 // @refresh reload
 
 import {
@@ -257,7 +258,7 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
 
       const notification = new Notification(title, {
         body: description ?? "",
-        icon: "https://opencode.ai/favicon-96x96-v3.png",
+        icon: BAMBOOKIT_LINKS.icon,
       })
       notification.onclick = () => {
         void window.api.showWindow()

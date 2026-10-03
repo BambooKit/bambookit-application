@@ -1,3 +1,4 @@
+import { BAMBOOKIT_LINKS } from "@/bambookit/links"
 import { Component, Show, createMemo, createResource } from "solid-js"
 import { createMediaQuery } from "@solid-primitives/media"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
@@ -150,7 +151,7 @@ const AppearanceSection: Component<{ controller: AppearanceSettingsController }>
           description={
             <>
               {language.t("settings.general.row.theme.description")}{" "}
-              <ExternalLink class="settings-v2-link" href="https://opencode.ai/docs/themes/">
+              <ExternalLink class="settings-v2-link" href={BAMBOOKIT_LINKS.desktopDocs}>
                 {language.t("common.learnMore")}
               </ExternalLink>
             </>

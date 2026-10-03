@@ -1,3 +1,4 @@
+import { BAMBOOKIT_LINKS } from "@/bambookit/links"
 import { TextField } from "@opencode-ai/ui/text-field"
 import * as Sentry from "@sentry/solid"
 import { Logo } from "@opencode-ai/ui/logo"
@@ -354,7 +355,7 @@ export const ErrorPage: Component<ErrorPageProps> = (props) => {
             <button
               type="button"
               class="flex items-center text-text-interactive-base gap-1"
-              onClick={() => platform.openExternal("https://opencode.ai/desktop-feedback")}
+              onClick={() => platform.openExternal(BAMBOOKIT_LINKS.bugReport)}
             >
               <div>{language.t("error.page.report.discord")}</div>
               <Icon name="discord" class="text-text-interactive-base" />

@@ -39,7 +39,17 @@ bun run build
 bun run package:win                           # installer in packages/desktop/dist
 ```
 
+## Support and feedback
+
+- Questions: [Discussions](https://github.com/BambooKit/bambookit-application/discussions)
+- Bugs: [report a bug](https://github.com/BambooKit/bambookit-application/issues/new?template=bug_report.yml)
+  (BambooKit Desktop → Help → **Report a Bug** opens the same form)
+- Ideas: [feature request](https://github.com/BambooKit/bambookit-application/issues/new?template=feature_request.yml)
+
 ## Credits
+
+BambooKit is created and maintained by **Satyam Pote**.
+
 
 BambooKit Desktop is built on [OpenCode](https://github.com/anomalyco/opencode) (MIT License, see
 [LICENSE](LICENSE)). The agent engine, models and tools come from OpenCode; BambooKit adds the account,

@@ -1,3 +1,4 @@
+import { BAMBOOKIT_LINKS } from "@/bambookit/links"
 import { Component, Show, createMemo, createResource, onMount, type JSX } from "solid-js"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -482,7 +483,7 @@ export const SettingsGeneral: Component = () => {
           description={
             <>
               {language.t("settings.general.row.theme.description")}{" "}
-              <ExternalLink href="https://opencode.ai/docs/themes/">{language.t("common.learnMore")}</ExternalLink>
+              <ExternalLink href={BAMBOOKIT_LINKS.desktopDocs}>{language.t("common.learnMore")}</ExternalLink>
             </>
           }
         >

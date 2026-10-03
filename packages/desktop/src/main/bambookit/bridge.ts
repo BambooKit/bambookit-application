@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { projectDiagram, sessionFileMap } from "./project-map"
-import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises"
+import { readdir, readFile, realpath, stat } from "node:fs/promises"
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { backoff, readSse } from "./sse"
 
@@ -284,7 +284,7 @@ export class OpenCodeBridge {
   }
 
   /** Answers a live request from the phone or website, relayed by the API. Nothing is stored there. */
-  async answerRelay(kind: string, params: { opencodeSessionId?: string }) {
+  async answerRelay(kind: string, params: { opencodeSessionId?: string; path?: string }) {
     const id = String(params?.opencodeSessionId ?? "")
     if (kind === "transcript") return { parts: (await this.loadTranscript(id)).parts }
     if (kind === "changes") return { files: (await this.loadTranscript(id)).files }
@@ -292,12 +292,47 @@ export class OpenCodeBridge {
       const t = await this.loadTranscript(id)
       return { files: sessionFileMap(t.messages, t.directory, t.files) }
     }
+    if (kind === "tree") return await this.listFolder(id, String(params?.path ?? ""))
+    if (kind === "file") return await this.readProjectFile(id, String(params?.path ?? ""))
     if (kind === "diagram") {
       const session = this.sessions.get(id)
       if (!session) throw new Error("This session is not on this PC")
       return await projectDiagram(session.directory)
     }
     throw new Error(`Unsupported request ${kind}`)
+  }
+
+  /** One folder of the session's project for the phone/website file browser (view only). */
+  private async listFolder(sessionId: string, path: string) {
+    const session = this.sessions.get(sessionId)
+    if (!session) throw new Error("This session is not on this PC")
+    const root = await realpath(session.directory)
+    const wanted = path.trim().replace(/^[\/]+|[\/]+$/g, "")
+    const dir = wanted && wanted !== "." ? await resolveInside(session.directory, wanted, true) : root
+    if (!(await stat(dir)).isDirectory()) throw new Error("Not a folder")
+    const items = await readdir(dir, { withFileTypes: true })
+    const entries: Array<{ name: string; path: string; type: "directory" | "file"; size: number | null }> = []
+    for (const e of items) {
+      if (e.name === ".git" || (!e.isDirectory() && !e.isFile())) continue
+      const abs = join(dir, e.name)
+      const size = e.isFile() ? ((await stat(abs).catch(() => null))?.size ?? null) : null
+      entries.push({ name: e.name, path: displayPath(root, abs), type: e.isDirectory() ? "directory" : "file", size })
+    }
+    entries.sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === "directory" ? -1 : 1))
+    return { path: dir === root ? "" : displayPath(root, dir), entries: entries.slice(0, 2000), truncated: entries.length > 2000 }
+  }
+
+  /** A project file's text for the phone/website code viewer (view only, up to 1 MB). */
+  private async readProjectFile(sessionId: string, path: string) {
+    const session = this.sessions.get(sessionId)
+    if (!session) throw new Error("This session is not on this PC")
+    const file = await resolveInside(session.directory, path, true)
+    const info = await stat(file)
+    if (!info.isFile()) throw new Error("Not a file")
+    if (info.size > 1_000_000) throw new Error("This file is larger than 1 MB; open it on your PC")
+    const buf = await readFile(file)
+    if (buf.subarray(0, 8000).includes(0)) throw new Error("Binary files cannot be shown")
+    return { path: displayPath(await realpath(session.directory), file), content: buf.toString("utf8"), size: info.size }
   }
 
   private markContinued(sessionId: string) {
@@ -666,7 +701,7 @@ export class OpenCodeBridge {
       ...(session?.lastAgent ? { agent: session.lastAgent } : {}),
     })
 
-    if (target && ["SEND_MESSAGE", "CONTINUE", "RETRY", "REVERT", "UNREVERT", "WRITE_FILE"].includes(command.type)) {
+    if (target && ["SEND_MESSAGE", "CONTINUE", "RETRY", "REVERT", "UNREVERT"].includes(command.type)) {
       this.requireContinued(target.opencodeSessionId)
       this.remoteSentAt.set(target.opencodeSessionId, Date.now())
     }
@@ -757,28 +792,8 @@ export class OpenCodeBridge {
         if (buf.subarray(0, 8000).includes(0)) throw new Error("Binary files cannot be shown")
         return { path: displayPath(directory!, file), content: buf.toString("utf8"), sha256: sha256(buf), size: info.size }
       }
-      case "WRITE_FILE": {
-        requireTarget(target)
-        const file = await resolveInside(directory!, command.payload.path, false)
-        const current = await readFile(file).catch(() => null)
-        // Never overwrite changes the phone has not seen.
-        if (current && command.payload.baseSha256 !== sha256(current)) throw new Error("The file changed on your PC since you opened it. Reload it and edit again.")
-        if (!current && command.payload.baseSha256) throw new Error("The file no longer exists on your PC.")
-        await mkdir(dirname(file), { recursive: true })
-        const next = Buffer.from(String(command.payload.content), "utf8")
-        await writeFile(file, next)
-        const rel = displayPath(directory!, file)
-        const before = current ? current.toString("utf8").split("\n") : []
-        const after = next.toString("utf8").split("\n")
-        const map = this.derived.get(target!.opencodeSessionId) ?? new Map<string, DerivedChange>()
-        map.set(rel, { file: rel, status: current ? "modified" : "added", additions: after.length, deletions: before.length, patches: [simplePatch(rel, before, after)] })
-        this.derived.set(target!.opencodeSessionId, map)
-        this.queue({
-          diffs: [{ opencodeSessionId: target!.opencodeSessionId, files: this.changesFor(target!.opencodeSessionId) }],
-          activity: [{ opencodeSessionId: target!.opencodeSessionId, type: "file.edited", summary: `Edited from phone: ${rel}` }],
-        })
-        return { path: rel, sha256: sha256(next) }
-      }
+      case "WRITE_FILE":
+        throw new Error("Files are view-only from the phone. Edit them in BambooKit Desktop.")
       case "CREATE_SESSION":
         throw new Error("Start new sessions in BambooKit Desktop on your PC.")
       default:

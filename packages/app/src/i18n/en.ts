@@ -151,9 +151,9 @@ export const dict = {
     "BambooKit gives you access to a curated set of reliable optimized models for coding agents.",
   "provider.connect.opencodeZen.line2":
     "With a single API key you'll get access to models such as Claude, GPT, Gemini, GLM and more.",
-  "provider.connect.opencodeZen.visit.prefix": "Visit ",
-  "provider.connect.opencodeZen.visit.link": "opencode.ai/zen",
-  "provider.connect.opencodeZen.visit.suffix": " to collect your API key.",
+  "provider.connect.opencodeZen.visit.prefix": "See ",
+  "provider.connect.opencodeZen.visit.link": "the BambooKit models guide",
+  "provider.connect.opencodeZen.visit.suffix": " to get your API key.",
   "provider.connect.oauth.code.visit.prefix": "Visit ",
   "provider.connect.oauth.code.visit.link": "this link",
   "provider.connect.oauth.code.visit.suffix":
@@ -598,7 +598,7 @@ export const dict = {
   "error.page.action.updateTo": "Update to {{version}}",
   "error.page.circular": "[Circular]",
   "error.page.report.prefix": "Please report this error to the BambooKit team",
-  "error.page.report.discord": "on Discord",
+  "error.page.report.discord": "on GitHub",
   "error.page.version": "Version: {{version}}",
 
   "error.dev.rootNotFound":
