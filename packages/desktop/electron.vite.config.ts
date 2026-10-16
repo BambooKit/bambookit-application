@@ -34,7 +34,9 @@ const bambookitEnv = (() => {
   return Object.fromEntries(keys.map((k) => [`import.meta.env.${k}`, JSON.stringify(process.env[k]?.trim() || file[k]?.trim() || "")]))
 })()
 
-const nodePtyPkg = `@lydell/node-pty-${process.platform}-${process.arch}`
+// BambooKit: the bundle pins node-pty to one architecture, so cross-builds (e.g. an Apple Silicon app built on an
+// Intel Mac) must name the target: BAMBOOKIT_TARGET_ARCH=arm64 bun run build.
+const nodePtyPkg = `@lydell/node-pty-${process.platform}-${process.env.BAMBOOKIT_TARGET_ARCH || process.arch}`
 
 const sentry =
   process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT

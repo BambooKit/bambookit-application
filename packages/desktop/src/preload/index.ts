@@ -138,6 +138,7 @@ const api: ElectronAPI = {
     signIn: (email, password) => ipcRenderer.invoke("bambookit:sign-in", email, password),
     signUp: (email, password, name) => ipcRenderer.invoke("bambookit:sign-up", email, password, name),
     signInWithGoogle: () => ipcRenderer.invoke("bambookit:sign-in-google"),
+    cancelGoogleSignIn: () => ipcRenderer.invoke("bambookit:cancel-google"),
     resendConfirmation: (email) => ipcRenderer.invoke("bambookit:resend-confirmation", email),
     resetPassword: (email) => ipcRenderer.invoke("bambookit:reset-password", email),
     signOut: () => ipcRenderer.invoke("bambookit:sign-out"),
@@ -146,6 +147,16 @@ const api: ElectronAPI = {
     unlinkDevice: (id) => ipcRenderer.invoke("bambookit:unlink-device", id),
     revokeDevice: (id) => ipcRenderer.invoke("bambookit:revoke-device", id),
     renameDevice: (name) => ipcRenderer.invoke("bambookit:rename-device", name),
+    setKeepAwake: (on) => ipcRenderer.invoke("bambookit:set-keep-awake", on),
+    setApprovalMode: (mode) => ipcRenderer.invoke("bambookit:set-approval-mode", mode),
+    setRemoteControl: (on) => ipcRenderer.invoke("bambookit:set-remote-control", on),
+    cancelPower: () => ipcRenderer.invoke("bambookit:cancel-power"),
+    setPhoneChatAnySession: (on) => ipcRenderer.invoke("bambookit:set-phone-chat-any", on),
+    sessionOpened: (id) => ipcRenderer.invoke("bambookit:session-opened", id),
+    openLogsFolder: () => ipcRenderer.invoke("bambookit:open-logs"),
+    copyDiagnostics: () => ipcRenderer.invoke("bambookit:copy-diagnostics"),
+    reconnect: () => ipcRenderer.invoke("bambookit:reconnect"),
+    apiGet: (path) => ipcRenderer.invoke("bambookit:api-get", path),
     onState: (cb) => {
       const handler = (_: unknown, state: any) => cb(state)
       ipcRenderer.on("bambookit-state", handler)

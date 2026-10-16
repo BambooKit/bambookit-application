@@ -42,8 +42,10 @@ const APP_IDS = {
   prod: "com.bambookit.desktop",
 } as const
 
-// Installers and auto-updates are published as GitHub Releases of BambooKit/bambookit-application.
+// Installers and auto-updates are published as GitHub Releases of BambooKit/bambookit-application,
+// except macOS, which has its own repository (BambooKit/bambookit-mac).
 const PUBLISH = { provider: "github", owner: "BambooKit", repo: "bambookit-application", channel: "latest" } as const
+const PUBLISH_MAC = { ...PUBLISH, repo: "bambookit-mac" } as const
 
 const getBase = (appId: string): Configuration => ({
   artifactName: "bambookit-desktop-${os}-${arch}.${ext}",
@@ -87,6 +89,7 @@ const getBase = (appId: string): Configuration => ({
     entitlementsInherit: "resources/entitlements.plist",
     notarize: true,
     target: ["dmg", "zip"],
+    ...(channel === "dev" ? {} : { publish: PUBLISH_MAC }),
   },
   dmg: {
     sign: true,

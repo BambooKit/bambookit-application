@@ -8,6 +8,7 @@ export class ApiError extends Error {
     message: string,
     readonly status: number,
     readonly code: string,
+    readonly details: Record<string, any> | null = null,
   ) {
     super(message)
   }
@@ -43,7 +44,7 @@ export class BambooApi {
       json = raw ? JSON.parse(raw) : null
     } catch {}
     if (!res.ok) {
-      throw new ApiError(json?.error?.message ?? `BambooKit API error ${res.status}`, res.status, json?.error?.code ?? `HTTP_${res.status}`)
+      throw new ApiError(json?.error?.message ?? `BambooKit API error ${res.status}`, res.status, json?.error?.code ?? `HTTP_${res.status}`, json?.error?.details ?? null)
     }
     return json as T
   }

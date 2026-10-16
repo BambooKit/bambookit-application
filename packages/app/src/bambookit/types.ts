@@ -18,6 +18,19 @@ export interface BambooKitState {
   opencode: BambooKitLinkState
   pairedPhones: number
   error: string | null
+  /** Absent when the desktop app is older than the UI. */
+  settings?: BambooKitPcSettings
+  planLimit?: { message: string; max: number | null; used: number | null; upgradeUrl: string | null } | null
+  pendingPower?: { id: string; action: "sleep" | "shutdown" | "lock"; runsAt: number } | null
+}
+
+export type BambooKitApprovalMode = "ask" | "edits" | "all"
+
+export interface BambooKitPcSettings {
+  approvalMode: BambooKitApprovalMode
+  keepAwake: boolean
+  allowRemoteControl: boolean
+  phoneChatAnySession?: boolean
 }
 
 export interface BambooKitDevice {
@@ -39,6 +52,7 @@ export interface BambooKitBridgeAPI {
   signIn: (email: string, password: string) => Promise<BambooKitResult<BambooKitAccount>>
   signUp: (email: string, password: string, name?: string) => Promise<BambooKitResult<{ user: BambooKitAccount | null; confirmationRequired: boolean }>>
   signInWithGoogle: () => Promise<BambooKitResult<BambooKitAccount>>
+  cancelGoogleSignIn: () => Promise<BambooKitResult<void>>
   resendConfirmation: (email: string) => Promise<BambooKitResult<void>>
   resetPassword: (email: string) => Promise<BambooKitResult<void>>
   signOut: () => Promise<BambooKitResult<void>>
@@ -47,6 +61,17 @@ export interface BambooKitBridgeAPI {
   unlinkDevice: (id: string) => Promise<BambooKitResult<void>>
   revokeDevice: (id: string) => Promise<BambooKitResult<void>>
   renameDevice: (name: string) => Promise<BambooKitResult<void>>
+  setKeepAwake: (on: boolean) => Promise<BambooKitResult<void>>
+  setApprovalMode: (mode: BambooKitApprovalMode) => Promise<BambooKitResult<void>>
+  setRemoteControl: (on: boolean) => Promise<BambooKitResult<void>>
+  cancelPower: () => Promise<BambooKitResult<void>>
+  setPhoneChatAnySession: (on: boolean) => Promise<BambooKitResult<void>>
+  sessionOpened: (opencodeSessionId: string) => Promise<BambooKitResult<void>>
+  openLogsFolder: () => Promise<BambooKitResult<void>>
+  copyDiagnostics: () => Promise<BambooKitResult<string>>
+  reconnect: () => Promise<BambooKitResult<void>>
+  /** Signed-in GET of /v1/me, /v1/me/plan, /v1/me/stats or /v1/me/achievements. */
+  apiGet: <T = unknown>(path: "/v1/me" | "/v1/me/plan" | "/v1/me/stats" | "/v1/me/achievements") => Promise<BambooKitResult<T>>
   onState: (cb: (state: BambooKitState) => void) => () => void
   onEvent: (cb: (event: { type: string; [key: string]: unknown }) => void) => () => void
 }

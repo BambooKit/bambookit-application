@@ -1,0 +1,180 @@
+# Builds BambooKit Desktop for every desktop platform and publishes the installers.
+#
+#   git tag v1.0.9 && git push origin v1.0.9      (or run it by hand: Actions → Release desktop → Run workflow)
+#
+# - Windows (.exe) and Linux (.AppImage, .deb) → GitHub Release of BambooKit/bambookit-application
+# - macOS Apple Silicon + Intel (.dmg, .zip, latest-mac.yml) → GitHub Release of BambooKit/bambookit-mac
+# Installed apps update themselves from those releases, and the website / API list them per platform.
+#
+# Repository secrets:
+#   BAMBOOKIT_SUPABASE_URL, BAMBOOKIT_SUPABASE_ANON_KEY  public sign-in config baked into the app (required for sign-in)
+#   BAMBOOKIT_FIREBASE_API_KEY, BAMBOOKIT_FIREBASE_PROJECT_ID, BAMBOOKIT_FIREBASE_AUTH_DOMAIN  optional
+#   MAC_RELEASE_TOKEN  fine-grained token with Contents: read and write on BambooKit/bambookit-mac
+#   AZURE_TRUSTED_SIGNING_*  optional Windows code signing (script/sign-windows.ps1 skips signing without them)
+
+name: Release desktop
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without the v (defaults to packages/desktop/package.json)"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  OPENCODE_CHANNEL: prod
+  BAMBOOKIT_API_URL: https://bambookit-api.onrender.com
+  BAMBOOKIT_SUPABASE_URL: ${{ secrets.BAMBOOKIT_SUPABASE_URL }}
+  BAMBOOKIT_SUPABASE_ANON_KEY: ${{ secrets.BAMBOOKIT_SUPABASE_ANON_KEY }}
+  BAMBOOKIT_FIREBASE_API_KEY: ${{ secrets.BAMBOOKIT_FIREBASE_API_KEY }}
+  BAMBOOKIT_FIREBASE_PROJECT_ID: ${{ secrets.BAMBOOKIT_FIREBASE_PROJECT_ID }}
+  BAMBOOKIT_FIREBASE_AUTH_DOMAIN: ${{ secrets.BAMBOOKIT_FIREBASE_AUTH_DOMAIN }}
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          v="${{ github.event.inputs.version }}"
+          if [ -z "$v" ] && [ "${GITHUB_REF_TYPE}" = "tag" ]; then v="${GITHUB_REF_NAME#v}"; fi
+          if [ -z "$v" ]; then v="$(node -p "require('./packages/desktop/package.json').version")"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Releasing $v"
+
+  build:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows-x64, os: windows-latest, platform: win, arch: x64 }
+          - { name: linux-x64, os: ubuntu-latest, platform: linux, arch: x64 }
+          - { name: mac-arm64, os: macos-14, platform: mac, arch: arm64 }
+          # Built on Apple Silicon too (cross-build); BAMBOOKIT_TARGET_ARCH bundles the x64 native modules.
+          - { name: mac-x64, os: macos-14, platform: mac, arch: x64 }
+    name: build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      BAMBOOKIT_TARGET_ARCH: ${{ matrix.arch }}
+      AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+      AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
+      AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE: ${{ secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Set the app version
+        working-directory: packages/desktop
+        run: node -e "const f='package.json';const p=require('./'+f);p.version=process.env.VERSION;require('fs').writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
+
+      - name: Install dependencies
+        run: |
+          if [ "${{ matrix.platform }}" = "mac" ]; then
+            # Native modules for both Mac architectures, so either app can be packaged on this runner.
+            bun install --os=darwin --cpu=x64 --cpu=arm64
+          else
+            bun install
+          fi
+
+      - name: Build the agent engine and app
+        working-directory: packages/desktop
+        run: |
+          bun run prebuild
+          bun run build
+
+      - name: Package (Windows)
+        if: matrix.platform == 'win'
+        working-directory: packages/desktop
+        run: npx electron-builder --win --x64 --config electron-builder.config.ts --publish never
+
+      - name: Package (Linux)
+        if: matrix.platform == 'linux'
+        working-directory: packages/desktop
+        run: npx electron-builder --linux --x64 --config electron-builder.config.ts --publish never -c.linux.target=AppImage -c.linux.target=deb "-c.artifactName=BambooKit-\${version}-linux-\${arch}.\${ext}"
+
+      - name: Package (macOS)
+        if: matrix.platform == 'mac'
+        working-directory: packages/desktop
+        # Ad-hoc signed, not notarized (no Apple Developer ID yet); the macOS app updates itself without Squirrel.
+        run: |
+          npx electron-builder --mac --${{ matrix.arch }} --config electron-builder.config.ts --publish never \
+            "-c.artifactName=BambooKit-\${version}-mac-\${arch}.\${ext}" \
+            -c.mac.identity=- -c.mac.notarize=false -c.mac.hardenedRuntime=false -c.dmg.sign=false
+          mv dist/latest-mac.yml "dist/latest-mac-${{ matrix.arch }}.yml"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          if-no-files-found: error
+          path: |
+            packages/desktop/dist/*.exe
+            packages/desktop/dist/*.exe.blockmap
+            packages/desktop/dist/*.AppImage
+            packages/desktop/dist/*.deb
+            packages/desktop/dist/*.dmg
+            packages/desktop/dist/*.zip
+            packages/desktop/dist/latest*.yml
+
+  publish:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect installers
+        run: |
+          mkdir -p win-linux mac
+          cp artifacts/windows-x64/* artifacts/linux-x64/* win-linux/
+          cp artifacts/mac-arm64/*.dmg artifacts/mac-arm64/*.zip artifacts/mac-x64/*.dmg artifacts/mac-x64/*.zip mac/
+          # One macOS update feed listing both architectures; each app picks the zip for its own architecture.
+          {
+            sed -n '1p' artifacts/mac-arm64/latest-mac-arm64.yml
+            echo "files:"
+            for a in arm64 x64; do sed -n '/^files:/,/^path:/{/^files:/d;/^path:/d;p;}' "artifacts/mac-$a/latest-mac-$a.yml"; done
+            sed -n '/^path:/,$p' artifacts/mac-arm64/latest-mac-arm64.yml
+          } > mac/latest-mac.yml
+          (cd win-linux && sha256sum BambooKit* > SHA256SUMS.txt)
+          (cd mac && sha256sum BambooKit* > SHA256SUMS.txt)
+          ls -l win-linux mac
+
+      - name: Release Windows and Linux (bambookit-application)
+        run: |
+          gh release create "v$VERSION" win-linux/* --repo "$GITHUB_REPOSITORY" --title "BambooKit Desktop $VERSION" --generate-notes --target "$GITHUB_SHA" \
+            || gh release upload "v$VERSION" win-linux/* --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Release macOS (bambookit-mac)
+        env:
+          GH_TOKEN: ${{ secrets.MAC_RELEASE_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then echo "::error::MAC_RELEASE_TOKEN is not set; the macOS installers are attached to this run's artifacts only."; exit 1; fi
+          notes="BambooKit for macOS $VERSION (Apple Silicon and Intel).
+
+          Install: curl -fsSL https://bambookit-web.onrender.com/install.sh | bash
+          Installed copies update themselves."
+          gh release create "v$VERSION" mac/* --repo BambooKit/bambookit-mac --title "BambooKit for macOS $VERSION" --notes "$notes" \
+            || gh release upload "v$VERSION" mac/* --repo BambooKit/bambookit-mac --clobber

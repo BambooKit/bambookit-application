@@ -1,4 +1,5 @@
 import { BambooKitStatusChip } from "@/bambookit/status-chip"
+import { BambooKitKeepAwakeButton, BambooKitPowerCountdown, BambooKitSessionLink } from "@/bambookit/pc-controls"
 import {
   createEffect,
   createMemo,
@@ -370,7 +371,10 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 }}
               >
                 <ChannelIndicator debugTools={props.debugTools} />
+                <BambooKitKeepAwakeButton />
                 <BambooKitStatusChip />
+                <BambooKitPowerCountdown />
+                <BambooKitSessionLink />
                 <Show when={windows() || linux()}>
                   <WindowsAppMenu command={command} platform={platform} variant="v2" />
                 </Show>
@@ -565,7 +569,10 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                   </div>
                 </div>
                 <ChannelIndicator debugTools={props.debugTools} />
+                <BambooKitKeepAwakeButton />
                 <BambooKitStatusChip />
+                <BambooKitPowerCountdown />
+                <BambooKitSessionLink />
               </div>
             </div>
 

@@ -20,6 +20,7 @@ export function BambooKitStatusChip() {
     const s = state()
     if (!s?.configured) return "BambooKit not configured"
     if (!s.account) return "Sign in to BambooKit"
+    if (s.planLimit) return "BambooKit · PC limit reached"
     if (linkState() === "connected") return s.pairedPhones ? `BambooKit · ${s.pairedPhones} phone${s.pairedPhones === 1 ? "" : "s"}` : "BambooKit"
     return `BambooKit · ${linkState() === "connecting" ? "connecting" : linkState() === "error" ? "error" : "offline"}`
   }

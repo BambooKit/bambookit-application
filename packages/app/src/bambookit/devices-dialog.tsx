@@ -5,6 +5,8 @@ import QRCode from "qrcode"
 import { createResource, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import { bambookit, bambookitApi } from "./store"
 import { BambooKitLoginScreen } from "./login-gate"
+import { BambooKitPcSettingsPanel, BambooKitPlanLimitNotice } from "./pc-settings-panel"
+import { BambooKitProfilePanel } from "./profile-panel"
 import type { BambooKitLinkState } from "./types"
 
 const LABEL: Record<BambooKitLinkState, string> = {
@@ -45,7 +47,7 @@ function Row(props: { label: string; state?: BambooKitLinkState; value?: string 
 
 export function DialogBambooKitDevices() {
   const api = bambookitApi()!
-  const [view, setView] = createSignal<"overview" | "pair">("overview")
+  const [view, setView] = createSignal<"overview" | "pair" | "profile">("overview")
   const [actionError, setActionError] = createSignal<string | null>(null)
   const [devices, { refetch }] = createResource(async () => {
     if (!bambookit.state()?.device) return []
@@ -70,10 +72,13 @@ export function DialogBambooKitDevices() {
   onCleanup(off)
 
   return (
-    <Dialog title="BambooKit" class="w-full max-w-[460px] mx-auto">
-      <div class="flex flex-col gap-5 p-6 pt-0">
+    <Dialog title="BambooKit" class="w-full max-w-[480px] mx-auto">
+      <div class="flex flex-col gap-5 p-6 pt-0 max-h-[78vh] overflow-y-auto">
         <Show when={bambookit.state()?.account} fallback={<BambooKitLoginScreenInline />}>
-          <Show when={view() === "overview"} fallback={<PairPanel onBack={() => setView("overview")} />}>
+          <Show
+            when={view() === "overview"}
+            fallback={view() === "profile" ? <BambooKitProfilePanel onBack={() => setView("overview")} /> : <PairPanel onBack={() => setView("overview")} />}
+          >
             <section class="flex flex-col">
               <span class="text-11-medium uppercase tracking-wider text-text-weaker pb-1">This device</span>
               <Row label="Device" value={bambookit.state()?.device?.name ?? "Registering…"} />
@@ -81,10 +86,13 @@ export function DialogBambooKitDevices() {
               <Row label="BambooKit API" state={bambookit.state()?.api} />
               <Row label="Realtime" state={bambookit.state()?.realtime} />
               <Row label="Agent engine" state={bambookit.state()?.opencode} />
-              <Show when={bambookit.state()?.error}>
+              <Show when={bambookit.state()?.error && !bambookit.state()?.planLimit}>
                 <p class="text-12-regular text-text-critical-base pt-1 break-words">{bambookit.state()?.error}</p>
               </Show>
             </section>
+
+            <BambooKitPlanLimitNotice />
+            <BambooKitPcSettingsPanel />
 
             <section class="flex flex-col gap-2">
               <div class="flex items-center justify-between">
@@ -130,7 +138,10 @@ export function DialogBambooKitDevices() {
               </Show>
             </section>
 
-            <div class="flex justify-end">
+            <div class="flex justify-between">
+              <Button size="small" variant="secondary" disabled={bambookit.state()?.api !== "connected"} onClick={() => setView("profile")}>
+                Profile & plan
+              </Button>
               <Button size="small" variant="ghost" onClick={() => void api.signOut()}>
                 Sign out of BambooKit
               </Button>

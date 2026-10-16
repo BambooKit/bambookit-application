@@ -1,6 +1,7 @@
 import { BAMBOOKIT_CONFIG, isAuthConfigured } from "./config"
 import { deleteSecret, readSecret, writeSecret } from "./secure-store"
 import { isFirebaseConfigured, refreshFirebaseToken, signInWithFirebaseGoogle } from "./firebase"
+import { signInWithSupabaseGoogle } from "./supabase-oauth"
 
 export interface AuthSession {
   accessToken: string
@@ -77,10 +78,23 @@ export class SupabaseAuth {
     await this.request("/recover", { email: email.trim() })
   }
 
-  /** Google sign-in via Firebase Auth (Firebase is registered with Supabase as third-party auth). */
+  /**
+   * Google sign-in. Uses Supabase's own Google provider (the account system BambooKit Web and Android use);
+   * Firebase is only used by builds that have Firebase configured but no Supabase project.
+   */
   async signInWithGoogle(): Promise<AuthSession> {
+    if (isAuthConfigured()) {
+      let grant
+      try {
+        grant = await signInWithSupabaseGoogle(BAMBOOKIT_CONFIG.oauthCallbackPort)
+      } catch (err: any) {
+        throw new AuthError(err?.message ?? String(err), err?.code ?? "OAUTH_FAILED")
+      }
+      const body = await this.request("/token?grant_type=pkce", { auth_code: grant.authCode, code_verifier: grant.codeVerifier })
+      return this.accept(body)
+    }
     if (!isFirebaseConfigured()) {
-      throw new AuthError("Google sign-in is not configured in this build (missing Firebase API key / project id).", "AUTH_NOT_CONFIGURED")
+      throw new AuthError("Google sign-in is not configured in this build (missing Supabase or Firebase settings).", "AUTH_NOT_CONFIGURED")
     }
     let tokens
     try {

@@ -32,6 +32,7 @@ export function BambooKitLoginScreen(props: { onSkip?: () => void; onDone?: () =
   const [busy, setBusy] = createSignal(false)
   const [error, setError] = createSignal<string | null>(null)
   const [notice, setNotice] = createSignal<string | null>(null)
+  const [googleWaiting, setGoogleWaiting] = createSignal(false)
 
   const run = async (fn: () => Promise<{ ok: boolean; error?: string; data?: any }>, onOk?: (data: any) => void) => {
     setBusy(true)
@@ -83,9 +84,32 @@ export function BambooKitLoginScreen(props: { onSkip?: () => void; onDone?: () =
         </div>
 
         <Show when={mode() !== "reset"}>
-          <Button variant="secondary" size="large" disabled={busy()} onClick={() => void run(() => api.signInWithGoogle(), () => (bambookit.setSkipped(false), props.onDone?.()))}>
-            Continue with Google
-          </Button>
+          <Show
+            when={googleWaiting()}
+            fallback={
+              <Button
+                variant="secondary"
+                size="large"
+                disabled={busy()}
+                onClick={() => {
+                  setGoogleWaiting(true)
+                  void run(
+                    () => api.signInWithGoogle(),
+                    () => (bambookit.setSkipped(false), props.onDone?.()),
+                  ).finally(() => setGoogleWaiting(false))
+                }}
+              >
+                Continue with Google
+              </Button>
+            }
+          >
+            <div class="flex items-center justify-between gap-3 rounded-md border border-border-weak-base px-3 py-2.5">
+              <span class="text-13-regular text-text-weak">Finish signing in with Google in your browser…</span>
+              <Button size="small" variant="ghost" onClick={() => void api.cancelGoogleSignIn()}>
+                Cancel
+              </Button>
+            </div>
+          </Show>
           <div class="flex items-center gap-3 text-11-regular text-text-weaker">
             <div class="h-px flex-1 bg-border-weak-base" />
             or

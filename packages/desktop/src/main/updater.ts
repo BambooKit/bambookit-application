@@ -1,7 +1,8 @@
 import { app, dialog } from "electron"
 import pkg from "electron-updater"
 import { UPDATER_ENABLED } from "./constants"
-import { createUpdaterController, type UpdaterReadyRecord } from "./updater-controller"
+import { createUpdaterController, type UpdaterBackend, type UpdaterReadyRecord } from "./updater-controller"
+import { createMacSelfUpdaterBackend } from "./mac-self-updater"
 import { getLogger } from "./logging"
 import { getStore } from "./store"
 import { setAppQuitting } from "./windows"
@@ -26,18 +27,25 @@ export function setupAutoUpdater(stop: () => Promise<void>) {
   })
 
   const store = getStore("opencode.updater")
+  const squirrel: UpdaterBackend = {
+    checkForUpdates: () => autoUpdater.checkForUpdates(),
+    downloadUpdate: () => autoUpdater.downloadUpdate(),
+    quitAndInstall: () => autoUpdater.quitAndInstall(),
+  }
+  // BambooKit for macOS is ad-hoc signed, which Squirrel.Mac refuses to update; it replaces its own bundle instead.
+  const native = process.platform === "darwin" ? createMacSelfUpdaterBackend(() => autoUpdater.checkForUpdates(), (m, d) => logger.log(m, d)) : squirrel
   return createUpdaterController({
     enabled: UPDATER_ENABLED,
     currentVersion: app.getVersion(),
     backend: {
-      checkForUpdates: () => autoUpdater.checkForUpdates(),
-      downloadUpdate: () => autoUpdater.downloadUpdate(),
+      checkForUpdates: () => native.checkForUpdates(),
+      downloadUpdate: () => native.downloadUpdate(),
       quitAndInstall: () => {
         // quitAndInstall closes all windows before emitting before-quit, so
         // flag the quit first to keep window ids persisted for restore.
         setAppQuitting()
         try {
-          autoUpdater.quitAndInstall()
+          native.quitAndInstall()
         } catch (error) {
           // The install failed and the app keeps running; clear the flag so
           // deliberate window closes prune ids again.

@@ -3,6 +3,8 @@ import { projectDiagram, sessionFileMap } from "./project-map"
 import { readdir, readFile, realpath, stat } from "node:fs/promises"
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { backoff, readSse } from "./sse"
+import { SessionStatsTracker, type SessionStats } from "./session-stats"
+import { readState, writeState } from "./secure-store"
 
 /**
  * Bridge between the local OpenCode server (loopback sidecar) and BambooKit.
@@ -11,6 +13,8 @@ import { backoff, readSse } from "./sse"
  *   (projects, sessions, transcript parts, diff summaries, permission requests).
  * - Executes authorized remote commands by calling OpenCode's own HTTP API, so OpenCode's
  *   permission model, tools and agents stay in charge. Nothing here runs shell commands.
+ * - Applies the PC's approval mode: requests the mode allows are answered "once" automatically, after they have
+ *   been recorded, so auto-approved requests still appear in the phone's history.
  */
 
 export interface SyncBatch {
@@ -43,6 +47,8 @@ interface SessionSync {
   /** Continued on this PC while BambooKit was running: only then may phones chat in it. */
   remote: boolean
   createdAt?: string
+  /** Work statistics for the Profile and achievements (capability session-stats). */
+  stats?: SessionStats
 }
 
 interface PartSync {
@@ -100,6 +106,9 @@ interface MessageMeta {
 
 type Logger = { log: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void }
 
+/** Decides whether a permission request is approved without asking (the PC's approval mode). */
+export type ApprovalPolicy = (opencodeSessionId: string, permission: string) => boolean
+
 const MAX_TEXT = 20_000
 
 export class OpenCodeBridge {
@@ -122,6 +131,10 @@ export class OpenCodeBridge {
   /** When this bridge last sent a prompt on a phone's behalf, per session. */
   private remoteSentAt = new Map<string, number>()
   private lastUserText = new Map<string, string>()
+  private stats = new SessionStatsTracker()
+  private statsLoaded: Promise<void> | null = null
+  /** When on, phones may chat in every session on this PC, not only the ones continued here. */
+  private chatAnySession = false
   private outbox: SyncBatch = {}
   private flushTimer: NodeJS.Timeout | null = null
   private connected = false
@@ -131,6 +144,7 @@ export class OpenCodeBridge {
     private readonly publish: (batch: SyncBatch) => Promise<void>,
     private readonly log: Logger,
     private readonly onStatus: (connected: boolean) => void = () => {},
+    private readonly autoApproves: ApprovalPolicy = () => false,
   ) {}
 
   get isConnected() {
@@ -174,6 +188,17 @@ export class OpenCodeBridge {
   }
 
   private async loop() {
+    // Saved counters must be in place before new events add to them.
+    this.statsLoaded ??= Promise.all([
+      this.stats.load(),
+      // Sessions continued on this PC stay continued across restarts and updates.
+      readState<string[]>("continued-sessions").then((ids) => {
+        for (const id of ids ?? []) this.continuedOnPc.add(id)
+      }),
+    ])
+      .then(() => undefined)
+      .catch((err) => this.log.warn("bambookit: saved state load failed", String(err)))
+    await this.statsLoaded
     let attempt = 0
     while (this.running) {
       this.abort = new AbortController()
@@ -252,6 +277,7 @@ export class OpenCodeBridge {
         const a = this.permissionToApproval(perm, p.worktree)
         batch.approvals!.push(a)
         batch.pendingApprovalSnapshot!.push(a.requestId)
+        this.maybeAutoApprove(a)
       }
     }
 
@@ -336,15 +362,38 @@ export class OpenCodeBridge {
   }
 
   private markContinued(sessionId: string) {
-    const state = this.sessions.get(sessionId)
-    if (!state || this.continuedOnPc.has(sessionId)) return
+    if (this.continuedOnPc.has(sessionId)) return
     this.continuedOnPc.add(sessionId)
+    // Keep the saved list bounded (oldest first out).
+    if (this.continuedOnPc.size > 2000) this.continuedOnPc.delete(this.continuedOnPc.values().next().value!)
+    void writeState("continued-sessions", [...this.continuedOnPc]).catch(() => undefined)
+    const state = this.sessions.get(sessionId)
+    if (!state) return
     state.remote = true
     this.queueSession(state)
   }
 
+  /** The session was opened on this PC or a phone asked to continue it here: phones may now chat in it. */
+  continueOnPc(sessionId: string) {
+    this.markContinued(sessionId)
+  }
+
+  /** "Let my phone chat in any session": every session on this PC is open to the owner's phone. */
+  setChatAnySession(on: boolean) {
+    if (this.chatAnySession === on) return
+    this.chatAnySession = on
+    for (const state of this.sessions.values()) {
+      state.remote = this.isRemote(state.opencodeSessionId)
+      this.queueSession(state)
+    }
+  }
+
+  private isRemote(sessionId: string) {
+    return this.chatAnySession || this.continuedOnPc.has(sessionId)
+  }
+
   private requireContinued(sessionId: string) {
-    if (!this.continuedOnPc.has(sessionId)) throw new Error("Continue this session on your PC first, then you can chat in it from your phone.")
+    if (!this.isRemote(sessionId)) throw new Error("Continue this session on your PC first, then you can chat in it from your phone.")
   }
 
   /** Debounced full transcript resync (after rewinds or removed messages). */
@@ -409,6 +458,7 @@ export class OpenCodeBridge {
       }
       case "session.deleted":
         this.sessions.delete(p.sessionID)
+        this.stats.forget(p.sessionID)
         this.queue({ removedSessions: [p.sessionID] })
         break
       case "session.status": {
@@ -479,7 +529,14 @@ export class OpenCodeBridge {
         }
         if (state && part.type === "tool") {
           state.currentAction = part.toolStatus === "running" || part.toolStatus === "pending" ? describeAction(part) : state.currentAction
+          if (part.toolStatus === "completed" || part.toolStatus === "error") {
+            const changes = part.toolStatus === "completed" ? toolChanges(p.part, state.directory) : []
+            this.stats.onToolFinished(part.opencodeSessionId, p.part, changes)
+          }
           this.queueSession(state)
+        }
+        if (state && part.type === "text" && part.role === "user" && part.text) {
+          if (this.stats.onPrompt(part.opencodeSessionId, part.messageId, part.text)) this.queueSession(state)
         }
         this.queue({ parts: [part] })
         break
@@ -515,6 +572,7 @@ export class OpenCodeBridge {
           this.queueSession(state)
         }
         this.queue({ approvals: [approval] })
+        this.maybeAutoApprove(approval)
         break
       }
       case "permission.replied": {
@@ -567,7 +625,7 @@ export class OpenCodeBridge {
       deletions: info.summary?.deletions ?? existing?.deletions ?? 0,
       files: info.summary?.files ?? existing?.files ?? 0,
       currentAction: existing?.currentAction ?? null,
-      remote: this.continuedOnPc.has(info.id),
+      remote: this.isRemote(info.id),
       createdAt: info.time?.created ? new Date(info.time.created).toISOString() : existing?.createdAt,
       lastModel: existing?.lastModel,
       lastAgent: existing?.lastAgent,
@@ -594,7 +652,8 @@ export class OpenCodeBridge {
 
   private sessionSync(s: SessionState): SessionSync {
     const { lastModel: _m, lastAgent: _a, revertMessageId: _r, shareUrl: _s, ...sync } = s
-    return sync
+    const stats = this.stats.get(s.opencodeSessionId)
+    return stats ? { ...sync, stats } : sync
   }
 
   private trackMessage(info: any) {
@@ -652,6 +711,19 @@ export class OpenCodeBridge {
     }
     this.pendingApprovals.set(p.id, approval)
     return approval
+  }
+
+  /** Answers a request "once" when the approval mode allows it; the reply event then records it as approved. */
+  private maybeAutoApprove(approval: ApprovalSync & { directory: string }) {
+    if (!this.autoApproves(approval.opencodeSessionId, approval.permission)) return
+    void this.oc("POST", `/permission/${approval.requestId}/reply`, { directory: approval.directory }, { reply: "once" })
+      .then(() => this.queue({ activity: [{ opencodeSessionId: approval.opencodeSessionId, type: "approval.auto", summary: `Auto-approved: ${approval.title ?? approval.permission}`.slice(0, 500) }] }))
+      .catch((err) => this.log.warn("bambookit auto-approve failed", String(err)))
+  }
+
+  /** Approves requests that are waiting when the approval mode is relaxed (e.g. switched to Auto-approve). */
+  applyApprovalMode() {
+    for (const approval of [...this.pendingApprovals.values()]) this.maybeAutoApprove(approval)
   }
 
   // ------------------------------------------------------------------ outbox
